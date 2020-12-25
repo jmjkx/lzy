@@ -25,11 +25,11 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 6, 5).double()
-        self.conv2 = nn.Conv2d(1, 1, 5).double()
+        self.conv2 = nn.Conv2d(6, 6, 5).double()
         #        self.fc1   = nn.Linear(16,10)
-        self.fc1 = nn.Linear(144, 10)
+        self.fc1 = nn.Linear(384, 10)
         #        self.fc2   = nn.Linear(128, 10)
-           
+        
         # self.manifold1 = ManifoldConvLayer(myMFA(1, 144, 10, 20))
         # self.manifold2 = ManifoldConvLayer(myMFA(1, 16, 10, 20))
         self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
@@ -39,85 +39,78 @@ class Net(nn.Module):
     #        self.manifold2 = ManifoldConvLayer(myPCA(16))
     
 
-    def get_manifold(self, x):
+    def get_manifold(self, x, dim):
         print('===========WWWWWWWWW=================')
-        W = ProjectionMatrix(x, self.Mw, self.Mb, 256).astype(np.float64)
-        manifold = torch.nn.Linear(W.shape[0], W.shape[1], bias=False).double()
-        manifold.data = W.astype(np.float64)
-        manifold = manifold.to('cuda')
-        return manifold
+        W = ProjectionMatrix(x, self.Mw, self.Mb, dim).astype(np.float64)
+        self.manifold = torch.nn.Linear(W.shape[0], W.shape[1], bias=False).double()
+        self.manifold.data = W.astype(np.float64)
+        self.manifold = self.manifold.to('cuda')
+        return self.manifold
 
     def forward(self, x, *y, train=False):
         self.samplenumber = x.shape[0]
         #  ============================
         x = self.conv1(x) # 6000 6 24 24
-        # x = x.reshape(x.shape[0]*x.shape[1], x.shape[2]*x.shape[2])
-
-        
-            # L = build('x%s = x[:, %s, :, :]'%(i, i), locals())
-            # locals().update(L)
-        # for i in range(x.shape[1]):
-        #         LL = build(s1%(i+1, i), locals().copy())
-        #         locals().update(LL)
-        # s1 = 'x%s = x[:, %s, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])'
-        # s2 = 'self.manifold%s = self.get_manifold(x%s)\nx%s = self.manifold%s(x%s)'
-        # s3 = 'x%s = x%s.reshape(self.samplenumber, int(x%s.shape[0] / self.samplenumber), int(sqrt(x%s.shape[1])), \
-        #     int(sqrt(x%s.shape[1])))'
-
-        for i in range(x.shape[1]):
-            exec(s1%(i, i))
-        # x1 = x[:, 0, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        # x2 = x[:, 1, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        # x3 = x[:, 2, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        # x4 = x[:, 3, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        # x5 = x[:, 4, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        # x6 = x[:, 5, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
-        
         # 建立6通道
+        # [x1, x2, x3, x4 ,x5 ,x6]  = map(lambda x, d:x[:, d, :, :].reshape(x.shape[0],\
+        #        x.shape[2]*x.shape[2]), [(x, 0), (x, 1), (x, 2), 
+        #        (x, 3), (x, 4), (x, 5)])
+
+        x1 = x[:, 0, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x2 = x[:, 1, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x3 = x[:, 2, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x4 = x[:, 3, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x5 = x[:, 4, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x6 = x[:, 5, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
         
 
+        #分通道流形
         if train:         
-            
-        #  流通道分流
-            for i in range(x.shape[1]):
-                L = build(s2%(i+1, i+1, i+1, i+1, i+1), locals())
-                locals().update(L)
+            x1 = self.get_manifold(x1, 256)(x1)
+            x2 = self.get_manifold(x2, 256)(x2)
+            x3 = self.get_manifold(x3, 256)(x3)
+            x4 = self.get_manifold(x4, 256)(x4)
+            x5 = self.get_manifold(x5, 256)(x5)
+            x6 = self.get_manifold(x6, 256)(x6)
+
         #  变形回去
-            # for i in range(x.shape[1]):
-            #     L = build(s3%(i+1, i+1, i+1, i+1, i+1), locals())
-            #     locals().update(L)
-        # x1 = x1.reshape(self.samplenumber, int(x1.shape[0] / self.samplenumber), int(sqrt(x1.shape[1])), \
-        #     int(sqrt(x1.shape[1])))
-
-        # x2 = x2.reshape(self.samplenumber, int(x2.shape[0] / self.samplenumber), int(sqrt(x2.shape[1])), \
-        #     int(sqrt(x2.shape[1])))
-
-        # x3 = x3.reshape(self.samplenumber, int(x3.shape[0] / self.samplenumber), int(sqrt(x3.shape[1])), \
-        #     int(sqrt(x3.shape[1])))
-
-        # x4 = x4.reshape(self.samplenumber, int(x4.shape[0] / self.samplenumber), int(sqrt(x4.shape[1])), \
-        #     int(sqrt(x4.shape[1])))
-
-        # x5 = x5.reshape(self.samplenumber, int(x5.shape[0] / self.samplenumber), int(sqrt(x5.shape[1])), \
-        #     int(sqrt(x5.shape[1])))
-
-        # x6 = x6.reshape(self.samplenumber, int(x6.shape[0] / self.samplenumber), int(sqrt(x6.shape[1])), \
-        #     int(sqrt(x6.shape[1])))
-       
-
+        x1 = x1.reshape(self.samplenumber, int(x1.shape[0] / self.samplenumber), int(sqrt(x1.shape[1])), \
+            int(sqrt(x1.shape[1])))
+        x2 = x2.reshape(self.samplenumber, int(x2.shape[0] / self.samplenumber), int(sqrt(x2.shape[1])), \
+            int(sqrt(x2.shape[1])))
+        x3 = x3.reshape(self.samplenumber, int(x3.shape[0] / self.samplenumber), int(sqrt(x3.shape[1])), \
+            int(sqrt(x3.shape[1])))
+        x4 = x4.reshape(self.samplenumber, int(x4.shape[0] / self.samplenumber), int(sqrt(x4.shape[1])), \
+            int(sqrt(x4.shape[1])))
+        x5 = x5.reshape(self.samplenumber, int(x5.shape[0] / self.samplenumber), int(sqrt(x5.shape[1])), \
+            int(sqrt(x5.shape[1])))
+        x6 = x6.reshape(self.samplenumber, int(x6.shape[0] / self.samplenumber), int(sqrt(x6.shape[1])), \
+            int(sqrt(x6.shape[1])))
+        x = torch.cat([x1, x2, x3, x4, x5, x6], dim=1, out=None)
         #  ============================
+
+
+        
         x = self.conv2(x)  
-        x = x.reshape(x.shape[0], x.shape[1]*x.shape[2]*x.shape[2])
+        
+        
+        x1 = x[:, 0, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x2 = x[:, 1, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x3 = x[:, 2, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x4 = x[:, 3, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x5 = x[:, 4, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+        x6 = x[:, 5, :, :].reshape(x.shape[0], x.shape[2]*x.shape[2])
+            
+        
         if train:
-            self.W2 = ProjectionMatrix1(x, self.Mw, self.Mb, 144).astype(np.float64)
-            self.manifold2 = torch.nn.Linear(self.W2.shape[0], self.W2.shape[1], bias=False).double()
-            self.manifold2 = self.manifold2.to('cuda')
-            self.manifold2.data = self.W2.astype(np.float64)        
-        x = self.manifold2(x)
+            x1 = self.get_manifold(x1, 64)(x1)
+            x2 = self.get_manifold(x2, 64)(x2)
+            x3 = self.get_manifold(x3, 64)(x3)
+            x4 = self.get_manifold(x4, 64)(x4)
+            x5 = self.get_manifold(x5, 64)(x5)
+            x6 = self.get_manifold(x6, 64)(x6)        
+            x = torch.cat([x1, x2, x3, x4, x5, x6], dim=1, out=None)
         #    ===================================
-
-
-
         #        set_trace()
         # ===================================
         x = x.view(x.size()[0], -1)  # 展开成一维的
@@ -130,6 +123,7 @@ class Net(nn.Module):
 
         #        x = torch.Tensor(x).requires_grad_()
         return x
+
 
 if __name__ == '__main__':
     print('start')

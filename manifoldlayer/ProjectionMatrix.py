@@ -23,13 +23,10 @@ def ProjectionMatrix(deepFeaTrn, Mw, Mb, dim):
     # A = np.load('A.npy')
     # B = np.load('B.npy')
     eigvalue, eigvector = sla.eigs(A, dim, B, which='LR')
-
-
     # for i in range(eigvector.shape[1]):
     #     eigvector[:,i] = eigvector[:,i]./torch.norm(eigvector(:,i));
     #
     # end
-
     return np.real(eigvector)
 
 def ProjectionMatrix1(deepFeaTrn, Mw, Mb, dim):
