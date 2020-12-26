@@ -12,6 +12,7 @@ import torch
 import torch.optim as optim
 # from ipdb import set_trace
 from torch import nn
+from tqdm import tqdm
 
 from datainput import extract_data, extract_labels
 from datapreprocess import MyDataset
@@ -123,7 +124,7 @@ for epoch in range(1):
         cnn = cnn.train()
         #label_numpy = labels.cpu().numpy()
 
-        outputs = cnn(inputs, train=True)
+        outputs = cnn(inputs, trainable=True)
 
         #loss = criterion(outputs, torch.max(labels, 1)[1])
         ##         print(cnn.conv1.weight.grad)
@@ -148,7 +149,7 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=BATCH_SIZE,
     shuffle=True
 )
-for epoch in range(EPOCH):
+for epoch in tqdm(range(EPOCH)):
     loss_sigma = 0.0  # 记录一个epoch的loss之和
     correct = 0.0
     total = 0.0
@@ -164,7 +165,9 @@ for epoch in range(EPOCH):
         cnn = cnn.train()
         label_numpy = labels.cpu().numpy()
 
-        outputs = cnn(inputs, train=False)
+        outputs = cnn(inputs)
+        print(next(cnn.SeparableManifoldLayer.singlechannelconv1.parameters()))
+        # print(next(cnn.SeparableManifoldLayer.params[1].parameters()))
 
         loss = criterion(outputs, torch.max(labels, 1)[1])
         #         print(cnn.conv1.weight.grad)
@@ -177,7 +180,7 @@ for epoch in range(EPOCH):
 
         
         #         print("batch_idx: %s" %batch_idx)
-        final_outputs = cnn(torch.from_numpy(x_train).double().cuda(), train=False)  # x_train已经按batch训练过了？？？？
+        final_outputs = cnn(torch.from_numpy(x_train).double().cuda())  # x_train已经按batch训练过了？？？？
         final_outputs.detach_()
         _, predicted = torch.max(final_outputs, 1)
 
