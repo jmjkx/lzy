@@ -7,20 +7,20 @@ class MyDense(nn.Module):
     def __init__(self):
         super(MyDense, self).__init__()
         self.params = nn.ParameterList([])
-        self.params.append(nn.Parameter(torch.rand((4 ,4), requires_grad=True)))
+        self.params.append(nn.Parameter(torch.rand((36 ,4), requires_grad=True)))
         # self.params.append(nn.Parameter(torch.randn(4, 4)))
         # self.params1 = nn.ParameterDict({
         #         'linear1': nn.Parameter(torch.randn(4, 4))
         # })
         # self.params1.update({'linear2': nn.Parameter(torch.randn(4, 2))}) # 新增
 
+
     def forward(self, x):
         # x = self.params(x)
-        x = x[0, 0, :]
-        x = torch.mul(x, self.params[0])
-        return x
+        x = x.view(1, 36)
+        x = torch.mm(x, self.params[0])
+        return x.T
         
-
 
 X = torch.rand(10, 3, 3, 4)
 Y = torch.rand(10, 4)
@@ -35,9 +35,9 @@ for i in range(10):
     
     loss.backward()  # 反向传播
     optimizer.step()  # 更新权值s
-    print(1)
+    print(i)
     # print(next(net.params.parameters()))
-    print(next(net.params.parameters()))
+    print(net.params[0])
 
 
    # def singlechannelconv(self, x: torch.tensor, *manifoldlayer: torch.nn.modules.linear.Linear)-> torch.tensor:

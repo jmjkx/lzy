@@ -1,16 +1,9 @@
 import os
-# from datapreprocess2 import *
-#from introduce import *
-#from manifoldConvLayer import ManifoldConvLayer
-#from manifoldFcLayer import ManifoldFcLayer
-#from myMFA import *
-#from myPCA import *
 from datetime import datetime
 
 import numpy as np
 import torch
 import torch.optim as optim
-# from ipdb import set_trace
 from torch import nn
 from tqdm import tqdm
 
@@ -18,7 +11,7 @@ from datainput import extract_data, extract_labels
 from datapreprocess import MyDataset
 from network import Net
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '8'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3,5'
 
 import warnings
 
@@ -95,11 +88,11 @@ writer = SummaryWriter(log_dir)
 
 # ---------------------搭建网络--------------------------
 cnn = Net()  # 创建CNN, 输入全连接层维数
-
+print("Total number of paramerters in networks is {}  ".format(sum(x.numel() for x in cnn.parameters())))
 cnn = cnn.double()
 
 # --------------------设置损失函数和优化器----------------------
-optimizer = optim.Adam(cnn.parameters(), lr=0.05)  # lr:(de fault: 1e-3)优化器
+optimizer = optim.Adam(cnn.parameters(), lr=0.001)  # lr:(de fault: 1e-3)优化器
 criterion = nn.CrossEntropyLoss()  # 损失函数
 scheduler = torch.optim.lr_scheduler.StepLR(
     optimizer, step_size=EPOCH / 2, gamma=0.5)  # 设置学习率下降策略
@@ -125,7 +118,14 @@ for epoch in range(1):
         #label_numpy = labels.cpu().numpy()
 
         outputs = cnn(inputs, trainable=True)
+    final_outputs = cnn(torch.from_numpy(x_train).double().cuda())  # x_train已经按batch训练过了？？？？
+    final_outputs.detach_()
+    _, predicted = torch.max(final_outputs, 1)
 
+    total = y_train.shape[0]
+
+    correct = ((predicted == torch.max(torch.from_numpy(y_train).cuda(), 1)[1]).squeeze().sum()).item()
+    print(correct)
         #loss = criterion(outputs, torch.max(labels, 1)[1])
         ##         print(cnn.conv1.weight.grad)
         ##         print(cnn.conv1.weight[0][0])
@@ -137,7 +137,7 @@ for epoch in range(1):
 
         ## 统计预测信息
 print('=========STAGE2==============')
-BATCH_SIZE = 1000
+BATCH_SIZE = 10000
 train_loader = torch.utils.data.DataLoader(
     dataset=training_dataset,
     batch_size=BATCH_SIZE,
@@ -164,35 +164,39 @@ for epoch in tqdm(range(EPOCH)):
         optimizer.zero_grad()  # 清空梯度
         cnn = cnn.train()
         label_numpy = labels.cpu().numpy()
-
+        # start = datetime.now()
         outputs = cnn(inputs)
-        print(next(cnn.SeparableManifoldLayer.singlechannelconv1.parameters()))
-        # print(next(cnn.SeparableManifoldLayer.params[1].parameters()))
+        # end = datetime.now()
+        # print (end -start).seconds
+        # print(cnn.SeparableManifoldLayer.params[0])
 
         loss = criterion(outputs, torch.max(labels, 1)[1])
         #         print(cnn.conv1.weight.grad)
         #         print(cnn.conv1.weight[0][0])
         loss.backward()  # 反向传播
-
+        
         optimizer.step()  # 更新权值s
-
+        print(cnn.SeparableManifoldLayer.params[0])
+        print(cnn.fc1._parameters)
+        print(cnn.fc1.parameters)
+        # print(cnn.conv1.parameters)
         loss_sigma += loss.item()
 
         
         #         print("batch_idx: %s" %batch_idx)
-        final_outputs = cnn(torch.from_numpy(x_train).double().cuda())  # x_train已经按batch训练过了？？？？
-        final_outputs.detach_()
-        _, predicted = torch.max(final_outputs, 1)
+    final_outputs = cnn(torch.from_numpy(x_train).double().cuda())  # x_train已经按batch训练过了？？？？
+    final_outputs.detach_()
+    _, predicted = torch.max(final_outputs, 1)
 
-        total = y_train.shape[0]
+    total = y_train.shape[0]
 
-        correct = ((predicted == torch.max(torch.from_numpy(y_train).cuda(), 1)[1]).squeeze().sum()).item()
+    correct = ((predicted == torch.max(torch.from_numpy(y_train).cuda(), 1)[1]).squeeze().sum()).item()
 
-        # 每 BATCH_SIZE 个 iteration 打印一次训练信息，loss为 BATCH_SIZE 个 iteration 的平均
-        loss_avg = loss_sigma / BATCH_SIZE
+    # 每 BATCH_SIZE 个 iteration 打印一次训练信息，loss为 BATCH_SIZE 个 iteration 的平均
+    loss_avg = loss_sigma / BATCH_SIZE
 
-        print("Training: Epoch[{:0>3}/{:0>3}] Iteration[{:0>3}/{:0>3}] Loss: {:.4f} Acc:{:.2%}".format(
-            epoch + 1, EPOCH, batch_idx + 1, len(train_loader), loss_sigma, correct / total))
+    print("Training: Epoch[{:0>3}/{:0>3}] Iteration[{:0>3}/{:0>3}] Loss: {:.4f} Acc:{:.2%}".format(
+        epoch + 1, EPOCH, batch_idx + 1, len(train_loader), loss_sigma, correct / total))
 
 
     # 记录训练loss
@@ -213,7 +217,7 @@ for epoch in tqdm(range(EPOCH)):
     # ------------------------------------ 观察模型在验证集上的表现 ------------------------------------
     if epoch % 1 == 0:
         loss_sigma = 0.0
-        cls_num = len(classes_name)
+        cls_num = 10
         conf_mat = np.zeros([cls_num, cls_num])  # 混淆矩阵
         cnn.eval()
         for batch_idx, data in enumerate(test_loader):

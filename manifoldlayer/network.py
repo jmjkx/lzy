@@ -7,92 +7,95 @@ import scipy.sparse.linalg as sla
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from numpy.lib.function_base import append
+from torch.nn.parameter import Parameter
 
 from manifoldConvLayer import ManifoldConvLayer
 from myMFA import myMFA
 
-torch.cuda.set_device(8)
-
-
-class SingleChannelConv(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
-        self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
+# class SingleChannelConv(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
+#         self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
        
-    def forward(self, x: torch.tensor, trainable = False, *manifoldlayer: torch.nn.modules.linear.Linear)-> torch.tensor:
-        x = x.reshape(x.shape[0], x.shape[2]*x.shape[2])
-        if trainable:
-            print('===========WWWWWWWWW=================')
-            W = SeparableManifoldLayer.ProjectionMatrix(x, self.Mw, self.Mb,144).astype(np.float64)
-            self.manifold = torch.nn.Linear(W.shape[0], W.shape[1], bias=False).double()
-            self.manifold.data = torch.from_numpy(W.astype(np.float64))
-            self.manifold = self.manifold.to('cuda')
-            # self.W = nn.Parameter(torch.from_numpy(W).to('cuda'), requires_grad=True)
+#     def forward(self, x: torch.tensor, trainable = False, *manifoldlayer: torch.nn.modules.linear.Linear)-> torch.tensor:
+#         x = x.reshape(x.shape[0], x.shape[2]*x.shape[2])
+#         if trainable:
+#             print('===========WWWWWWWWW=================')
+#             W = SeparableManifoldLayer.ProjectionMatrix(x, self.Mw, self.Mb,144).astype(np.float64)
+#             self.manifold = torch.nn.Linear(W.shape[0], W.shape[1], bias=False).double()
+#             self.manifold.data = torch.from_numpy(W.astype(np.float64))
+#             self.manifold = self.manifold.to('cuda')
+#             # self.W = nn.Parameter(torch.from_numpy(W).to('cuda'), requires_grad=True)
             
-        # else:
-        #     self.manifold = manifoldlayer[0]
-        # x = torch.mm(x, self.W)
-        x = self.manifold(x)
-        x = x.reshape(x.shape[0], int(sqrt(x.shape[1])), \
-            int(sqrt(x.shape[1])))
-        return x
+#         # else:
+#         #     self.manifold = manifoldlayer[0]
+#         # x = torch.mm(x, self.W)
+#         x = self.manifold(x)
+#         x = x.reshape(x.shape[0], int(sqrt(x.shape[1])), \
+#             int(sqrt(x.shape[1])))
+#         return x
 
 
 class SeparableManifoldLayer(nn.Module):
-    def __init__(self, dim: int)-> None:
+    def __init__(self, ori_dim: int, dim: int, C_dim: int)-> None:
         '''
         动态可分离流型层
+        oir_dim 输入的维数
+        dim 降至维数
+        C_dim 通道数，分流
         '''
         super().__init__()
         self.dim = dim
-        # self.params = nn.ParameterList([])
-        self.params = []
+        self.ori_dim = ori_dim
+        self.C_dim = C_dim
+        self.params = nn.ParameterList([nn.Parameter(torch.randn(self.ori_dim, self.dim).double().to('cuda'), requires_grad=True) for i in range(C_dim)])
         self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
+        self.Mw = torch.from_numpy(self.Mw).to('cuda:0')
         self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
+        self.Mb = torch.from_numpy(self.Mb).to('cuda:1')
 
         
     @staticmethod
     def ProjectionMatrix(deepFeaTrn: torch.tensor, Mw: np.array, Mb: np.array, dim: int)-> np.array:
         # deepFeaTrn = deepFeaTrn.cpu().clone().detach().numpy()
-        # print('======================matmul==============================')
-        # A = np.matmul(np.matmul(deepFeaTrn.T, Mb), deepFeaTrn)
-        # B = np.matmul(np.matmul(deepFeaTrn.T, Mw), deepFeaTrn)
-        # print('======================shape==============================')
-        # a = A.shape[0]
-        # b = B.shape[0]
-        # print('======================eye==============================')
-        # A = A + np.eye(a) * 0.01;
-        # B = B + np.eye(b) * 0.01;
-        # print('======================TTTTTTTTTTT==============================')
-        # A = (A + A.T) / 2;
-        # B = (B + B.T) / 2;
-        # # np.save('A.npy', A)
-        # # np.save('B.npy', B)
-        # print('eig==============================')
-        A = np.load('A.npy')
-        B = np.load('B.npy')
+        deepFeaTrn = deepFeaTrn
+        print('======================matmul==============================')
+        A = np.matmul(np.matmul(deepFeaTrn.T, Mb), deepFeaTrn)
+        B = np.matmul(np.matmul(deepFeaTrn.T, Mw), deepFeaTrn)
+        print('======================shape==============================')
+        a = A.shape[0]
+        b = B.shape[0]
+        print('======================eye==============================')
+        A = A + np.eye(a) * 0.01;
+        B = B + np.eye(b) * 0.01;
+        print('======================TTTTTTTTTTT==============================')
+        A = (A + A.T) / 2;
+        B = (B + B.T) / 2;
+        print('eig==============================')
         eigvalue, eigvector = sla.eigs(A, dim, B, which='LR')
         return np.real(eigvector)
 
    
-    def forward(self, x:torch.tensor, trainable=False):
-        self.trainable = trainable
+    def forward(self, x:torch.tensor, trainable=False)-> None:
         """
         按通道分别卷积
         """
         if trainable:
-            # self.params.append(SingleChannelConv())
-            # x = [Singlechannelconv(x[:, i, :, :]).unsqueeze(1) for i in range(x.shape[1])]
-            # x_sep = [Singlechannelconv(x[:, i, :, :]).unsqueeze(1) for i in range(x.shape[1])]
-            self.singlechannelconv1 = SingleChannelConv()
-            self.singlechannelconv2 = SingleChannelConv()
-            x_sep = [self.singlechannelconv1(x[:, 0, :, :], trainable).unsqueeze(1), self.singlechannelconv1(x[:, 1, :, :], trainable).unsqueeze(1)]
-            
-        else:
-            # x_sep = [self.singlechannelconv(x[:, i, :, :], self.params[i]).unsqueeze(1) for i in range(x.shape[1])]
-            x_sep = [self.singlechannelconv1(x[:, 0, :, :]).unsqueeze(1), self.singlechannelconv1(x[:, 1, :, :]).unsqueeze(1)]
+            for i in range(x.shape[1]):
+                W = self.ProjectionMatrix(x[:, i, :, :].view(x.shape[0], x.shape[2]*x.shape[2]), self.Mb, self.Mw, self.dim)
+                self.params[i].data = torch.from_numpy(W).double().cuda()
+        #         self.params.append(nn.Parameter(torch.rand(576, 256).double().to('cuda'), requires_grad=True))
+        
+        x_sep = [torch.mm(x[:, i, :, :].view(x.shape[0], x.shape[2]*x.shape[2]), self.params[i]) for i in range(x.shape[1])]
         x = torch.cat(tuple(x_sep), dim=1)
+        x = x.view(x.shape[0], self.C_dim, int(sqrt(x.shape[1]/self.C_dim)), int(sqrt(x.shape[1]/self.C_dim)))
+
+        # else:
+        #     # x_sep = [self.singlechannelconv(x[:, i, :, :], self.params[i]).unsqueeze(1) for i in range(x.shape[1])]
+        #     x_sep = [self.singlechannelconv1(x[:, 0, :, :]).unsqueeze(1), self.singlechannelconv1(x[:, 1, :, :]).unsqueeze(1)]
+        # x = torch.cat(tuple(x_sep), dim=1) 
         return x
 
 
@@ -100,18 +103,20 @@ class SeparableManifoldLayer(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 2, 5).double()
-        self.conv2 = nn.Conv2d(2, 2, 5).double()
-        self.fc1 = nn.Linear(288, 10)
-        self.SeparableManifoldLayer = SeparableManifoldLayer(144).double()
+        self.conv1 = nn.Conv2d(1, 6, 5)
+        self.conv2 = nn.Conv2d(6, 3, 5)
+        self.fc1 = nn.Linear(192, 10)
+        self.SeparableManifoldLayer = SeparableManifoldLayer(576, 256, 6)
+        self.SeparableManifoldLayer2 = SeparableManifoldLayer(144, 64, 3)
 
     def forward(self, x, *y, trainable=False):
 
         self.samplenumber = x.shape[0]
         #  ============================
-        x = self.conv1(x) # 6000 6 24 24
+        x = self.conv1(x) # 1000 6 24 24
         x = self.SeparableManifoldLayer(x, trainable=trainable)
-      
+        x = self.conv2(x)# 1000 2 12 12
+        x = self.SeparableManifoldLayer2(x, trainable=trainable)
         #  ============================
         # x = self.conv2(x)  
            
@@ -129,6 +134,7 @@ class Net(nn.Module):
 
         #        x = torch.Tensor(x).requires_grad_()
         return x
+
 
 if __name__ == '__main__':
     print('start')
