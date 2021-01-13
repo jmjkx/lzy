@@ -39,7 +39,7 @@ from myMFA import myMFA
 
 
 class SeparableManifoldLayer(nn.Module):
-    def __init__(self, ori_dim: int, dim: int, C_dim: int)-> None:
+    def __init__(self, ori_dim: int, dim: int, C_dim: int, Mw, Mb)-> None:
         '''
         动态可分离流型层
         oir_dim 输入的维数
@@ -51,30 +51,30 @@ class SeparableManifoldLayer(nn.Module):
         self.ori_dim = ori_dim
         self.C_dim = C_dim
         self.params = nn.ParameterList([nn.Parameter(torch.randn(self.ori_dim, self.dim).double().to('cuda'), requires_grad=True) for i in range(C_dim)])
-        self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
-        self.Mw = torch.from_numpy(self.Mw).to('cuda:0')
-        self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
-        self.Mb = torch.from_numpy(self.Mb).to('cuda:1')
+        self.Mw = Mw
+        self.Mb = Mb 
 
         
-    @staticmethod
-    def ProjectionMatrix(deepFeaTrn: torch.tensor, Mw: np.array, Mb: np.array, dim: int)-> np.array:
+    def ProjectionMatrix(self, deepFeaTrn: torch.tensor, dim)-> np.array:
+
         # deepFeaTrn = deepFeaTrn.cpu().clone().detach().numpy()
-        deepFeaTrn = deepFeaTrn
+        deepFeaTrn = deepFeaTrn.float()
+       
         print('======================matmul==============================')
-        A = np.matmul(np.matmul(deepFeaTrn.T, Mb), deepFeaTrn)
-        B = np.matmul(np.matmul(deepFeaTrn.T, Mw), deepFeaTrn)
-        print('======================shape==============================')
+        deepFeaTrn = deepFeaTrn.to('cuda:1')
+        A = torch.mm(torch.mm(deepFeaTrn.T,self.Mb), deepFeaTrn)
+        deepFeaTrn = deepFeaTrn.to('cuda:0') 
+        B = torch.mm(torch.mm(deepFeaTrn.T,self.Mw), deepFeaTrn)
         a = A.shape[0]
         b = B.shape[0]
-        print('======================eye==============================')
-        A = A + np.eye(a) * 0.01;
-        B = B + np.eye(b) * 0.01;
-        print('======================TTTTTTTTTTT==============================')
+        A = A + torch.eye(a).to('cuda:1') * 0.01;
+        B = B + torch.eye(b).to('cuda:0') * 0.01;
         A = (A + A.T) / 2;
         B = (B + B.T) / 2;
-        print('eig==============================')
-        eigvalue, eigvector = sla.eigs(A, dim, B, which='LR')
+        print('==============================eig==============================')
+        eigvalue, eigvector = sla.eigs(A.cpu().clone().detach().numpy(), dim, \
+            B.cpu().clone().detach().numpy(), which='LR')
+        print('========================eigend=================================')
         return np.real(eigvector)
 
    
@@ -84,7 +84,7 @@ class SeparableManifoldLayer(nn.Module):
         """
         if trainable:
             for i in range(x.shape[1]):
-                W = self.ProjectionMatrix(x[:, i, :, :].view(x.shape[0], x.shape[2]*x.shape[2]), self.Mb, self.Mw, self.dim)
+                W = self.ProjectionMatrix(x[:, i, :, :].view(x.shape[0], x.shape[2]*x.shape[2]), self.dim)
                 self.params[i].data = torch.from_numpy(W).double().cuda()
         #         self.params.append(nn.Parameter(torch.rand(576, 256).double().to('cuda'), requires_grad=True))
         
@@ -106,11 +106,15 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.conv2 = nn.Conv2d(6, 3, 5)
         self.fc1 = nn.Linear(192, 10)
-        self.SeparableManifoldLayer = SeparableManifoldLayer(576, 256, 6)
-        self.SeparableManifoldLayer2 = SeparableManifoldLayer(144, 64, 3)
+        self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
+        self.Mw = torch.from_numpy(self.Mw).to('cuda:0') 
+        self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
+        self.Mb = torch.from_numpy(self.Mb).to('cuda:1')
+        self.SeparableManifoldLayer2 = SeparableManifoldLayer(144, 64, 3, self.Mw, self.Mb)
+        self.SeparableManifoldLayer = SeparableManifoldLayer(576, 256, 6, self.Mw, self.Mb)
+
 
     def forward(self, x, *y, trainable=False):
-
         self.samplenumber = x.shape[0]
         #  ============================
         x = self.conv1(x) # 1000 6 24 24
