@@ -7,11 +7,18 @@ import torch.optim as optim
 from torch import nn
 from tqdm import tqdm
 
+from AutoGPU import autoGPU
 from datainput import extract_data, extract_labels
 from datapreprocess import MyDataset
 from network import Net
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '3,5'
+IS_CPU = 0
+try:
+    autoGPU(2, 16000)
+except AssertionError:
+    IS_CPU = 1
+
+
 
 import warnings
 

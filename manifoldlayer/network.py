@@ -105,13 +105,15 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.conv2 = nn.Conv2d(6, 3, 5)
-        self.fc1 = nn.Linear(192, 10)
+        self.conv3 = nn.Conv2d(3, 1, 5)
+        # self.fc1 = nn.Linear(192, 10)
         self.Mw = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mw.npy')
-        self.Mw = torch.from_numpy(self.Mw).to('cuda:0') 
+        self.Mw = torch.from_numpy(self.Mw).to('cuda:0')
         self.Mb = np.load('/home/liyuan/Programming/python/lzy/graph/graphs/Mb.npy')
         self.Mb = torch.from_numpy(self.Mb).to('cuda:1')
-        self.SeparableManifoldLayer2 = SeparableManifoldLayer(144, 64, 3, self.Mw, self.Mb)
         self.SeparableManifoldLayer = SeparableManifoldLayer(576, 256, 6, self.Mw, self.Mb)
+        self.SeparableManifoldLayer2 = SeparableManifoldLayer(144, 64, 3, self.Mw, self.Mb)
+        self.SeparableManifoldLayer3 = SeparableManifoldLayer(16, 10, 1, self.Mw, self.Mb)
 
 
     def forward(self, x, *y, trainable=False):
@@ -119,8 +121,13 @@ class Net(nn.Module):
         #  ============================
         x = self.conv1(x) # 1000 6 24 24
         x = self.SeparableManifoldLayer(x, trainable=trainable)
-        x = self.conv2(x)# 1000 2 12 12
+        x = self.conv2(x)# 60000 3 12 12------->60000 3 8 8
         x = self.SeparableManifoldLayer2(x, trainable=trainable)
+        x = self.conv3(x)# 60000 3 8 8------->60000 1, 4, 4
+        x = self.SeparableManifoldLayer3(x, trainable=trainable)# 60000 1 4 4------->60000 1, 4, 4
+
+        # x = self.conv3(x)# 1000 2 12 12
+        # x = self.SeparableManifoldLayer3(x, trainable=trainable)
         #  ============================
         # x = self.conv2(x)  
            
@@ -132,7 +139,7 @@ class Net(nn.Module):
 
         #        x = F.relu(x)
 
-        x = F.relu(self.fc1(x))
+        x = F.relu(x)
         #       set_trace()
         #        x = F.relu(self.fc2(x))
 
